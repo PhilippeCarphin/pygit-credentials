@@ -21,13 +21,18 @@ for repo in os.listdir(github):
         repos[repo] = Repository(git_dir)
     except:
         print('could not make repo from non-hidden directory {}'.format(repo))
-password = getpass.getpass('Enter password for philippecarphin@github.com')
-CREDENTIALS = pygit2.credentials.UserPass('PhilippeCarphin', password)
 class MyCreds(pygit2.RemoteCallbacks):
-    def credentials(self, url, username_from_url, allowed_types):
-        print("My credentials")
-        print("url=" + url)
-        return CREDENTIALS
+    @staticmethod
+    def credentials(url, username_from_url, allowed_types):
+        print('url={}, username_from_url={}, allowed_types={}'.format(url, username_from_url,allowed_types))
+        print("==== My credentials ====")
+        if allowed_types == pygit2.GIT_CREDTYPE_USERPASS_PLAINTEXT:
+            print("allowed_types == GIT_CREDTYPE_USERPASS_PLAINTEXT")
+            password = getpass.getpass('Enter password for url={}'.format(url))
+            return UserPass('philippecarphin', password)
+        else:
+            raise pygit2.GitError("Unhandled value for GIT_CRED_TYPE_XXX=" + str(allowed_types))
+
 rtp = None
 for n, r in repos.items():
     try:
@@ -36,10 +41,10 @@ for n, r in repos.items():
         continue
 
     try:
-        cb = RemoteCallbacks(credentials=UserPass('PhilippeCarphin', password))
+        cb = RemoteCallbacks(credentials=MyCreds.credentials)
         rtp = o.fetch(callbacks=cb)
         print(rtp)
-    except GitError as e:
+    except KeyError as e:
         print('Exception while fetching repo {} :: {}'.format(n, e))
         break
 
