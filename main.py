@@ -70,3 +70,7 @@ transfer_process_thingy = origin_object.fetch(callbacks=MyCreds())
                                             #           ^^^^^^^^^
                                             # pass an instance of MyCreds as
                                             # the paramater callbacks.
+
+# To push, we can do something like this, the function doesn't return anything.
+# push_result = origin_object.push(specs=['refs/heads/pushtest'], callbacks=MyCreds())
+# print('push_result={}'.format(push_result))
