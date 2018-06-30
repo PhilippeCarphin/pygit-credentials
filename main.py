@@ -74,3 +74,55 @@ transfer_process_thingy = origin_object.fetch(callbacks=MyCreds())
 # To push, we can do something like this, the function doesn't return anything.
 # push_result = origin_object.push(specs=['refs/heads/pushtest'], callbacks=MyCreds())
 # print('push_result={}'.format(push_result))
+
+
+# Say you want to push all branches, there are ways of getting the available
+# refspecs to do that without resorting to string manipulations.
+# The branches attribute of a repository is an iterable that contains.
+branches_object = repo_object.branches
+the_branches = list(branches_object)
+print(the_branches)
+
+# The branches are actually split up into two sub-branches object:
+local_branches_object = branches_object.local
+remote_branches_object = branches_object.remote
+print(list(local_branches_object))
+print(list(remote_branches_object))
+
+# We can get a branch:
+a_branch_object = local_branches_object['master']
+# And so we find out that it's not so much a list but more like a dictionary.
+# But not in an obvious way.  It has an iterator that yields branch names, and it has
+# a __getitem__, so we can get a dictionary if we want to look at it in the debugger
+branches_dict = {name: branches_object[name] for name in branches_object}
+
+# Anyway, a branch object has some attributes, properties, and methods.  Namely, it
+# has a name which is a refspec string (not the pygit2.Refspec class) and a branch_name
+# which is what gets yelded by the iterator and is what we use as keys to get
+# the branches.
+print('branch.name=' + a_branch_object.name)
+print('branch.branch_name=' + a_branch_object.branch_name)
+
+# So this is a way we could push all the branches to origin:
+origin_object.push(
+    specs=[local_branches_object[branch_name].name for branch_name in local_branches_object],
+    callbacks=MyCreds()
+)
+
+# Or like this if, for example, we want to ask the user at each branch if the
+# want to push it.
+for branch_name in local_branches_object:
+    print('pushing branch=' + branch_name)
+    branch_object = local_branches_object[branch_name]
+    origin_object.push([branch_object.name], callbacks=MyCreds())
+
+# But we can minimize server interactions if we do this:
+push_specs = []
+for branch_name in local_branches_object:
+    # Ask user if they want to push the branch
+    if True:
+        push_specs.append(local_branches_object[branch_name].name)
+print('pushing {}'.format(push_specs))
+origin_object.push(specs=push_specs, callbacks=MyCreds())
+
+# So far we have TODO complete this
