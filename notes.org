@@ -1,0 +1,176 @@
+* Pygit2 credentials
+This is the simplest code that will allow you to fetch from a repository that
+requires username-password authentication.
+
+#+BEGIN_SRC python
+import pygit2
+import os
+import getpass
+#+END_SRC
+
+The repo is [[https://github.com/EscherCone][EscherCone]] which is a repo that is on my computer but is private on github.
+
+#+BEGIN_SRC python
+repo_path = os.path.join(os.path.expanduser('~'), 'Documents', 'GitHub', 'EscherCone')
+repo_object = pygit2.Repository(os.path.join(repo_path, '.git'))
+#+END_SRC
+
+We're going to want to fetch.  For that we will access the relevant entities through
+pygit2.Remote object.  The pygit2.Repository has an attribute called remotes which
+acts like a dictionary of pygit2.Remote with keys that are branch names.
+
+#+BEGIN_SRC python
+origin_object = repo_object.remotes['origin']
+#+END_SRC
+
+We want to fetch from the remote origin, so we're going to do
+
+#+BEGIN_SRC python
+origin_object.fetch()
+#+END_SRC
+
+Since this will require credentials, we're actually going to call the function
+like this:
+
+#+BEGIN_SRC python
+origin_object.fetch(callbacks=a_pygit2.RemoteCallbacks)
+#+END_SRC
+
+And the RemoteCallbacks thing is an object that implements four
+
+#+BEGIN_SRC python
+certificate_check(certificate, valid, host)
+credentials(url, username_from_url, allowed_types)
+push_update_reference(refname, message)
+sideband_progress(string)
+transfer_progress(stats)
+update_tips(refname, old, new)
+#+END_SRC
+
+We reimplement the credentials function whose job it is to take some
+parameters and use those to figure out how to obtain those credentials
+by whatever means.  When it's done, it is expected to return an instance of
+some classes that contain various types of Credentials.  The Username class
+just contains a username.  The UserPass class contains the fields username and
+password.  THere are two others fo doing different types of authentication
+
+Our object that groups some callbacks that will get called.  An instance of
+this will be passed as the 'callbacks' parameter of the fetch method.
+
+#+BEGIN_SRC python
+class MyCreds(pygit2.RemoteCallbacks):
+    # It has to implement some methods, but we're only going to use it in a way
+    # where this method will be called.
+    def credentials(self, url, username_from_url, allowed_types):
+        print(self, url, username_from_url, allowed_types)
+        # allowed_types tells us what type of Credential object the server wants
+        if allowed_types == pygit2.GIT_CREDTYPE_USERPASS_PLAINTEXT:
+            # Our problem: do what you need to do in order to find out what to
+            # put into the UserPass object.
+            password = getpass.getpass('Enter password for url={}'.format(url))
+            return pygit2.UserPass('philippecarphin', password)
+        elif allowed_types == pygit2.GITCREDTYPE_USERNAME:
+            raise NotImplemented
+#+END_SRC
+
+And that's it! Doing the fetch and giving it the callback.  It returns a
+pygit2.TransferProgress.  Anyway the point is calling fetch with the callback.
+
+#+BEGIN_SRC pygthon
+transfer_process_thingy = origin_object.fetch(callbacks=MyCreds())
+#+END_SRC
+                                                        ^^^^^^^^^
+                                            pass an instance of MyCreds as
+                                            the paramater callbacks.
+
+
+It's going to ask for the password a bunch of times and we don't need that.
+If we want, we can reimplement a method of the RemoteCallbacks class without
+Creating a derived object, we can use the constructor of RemoteCallbacks like so:
+
+#+BEGIN_SRC python
+password = getpass.getpass("Please enter password")
+easy_creds = pygit2.RemoteCallbacks(
+    credentials=lambda a, b, c: pygit2.UserPass('PhilippeCarphin', password)
+)
+#+END_SRC
+
+To push, we can do something like this, the function doesn't return anything.
+#+BEGIN_SRC python
+push_result = origin_object.push(specs=['refs/heads/pushtest'], callbacks=easy_creds)
+print('push_result={}'.format(push_result))
+#+END_SRC
+We don't want to have to write this string out ourselves, so we're going to
+work out how to obtain these strings.
+
+
+Each repository object has an attribute called branches which is iterable.
+The iterator yields branch names, and with the keys, we get branch objects.
+#+BEGIN_SRC python
+branches_object = repo_object.branches
+the_branches = list(branches_object)
+print(the_branches)
+#+END_SRC
+
+The branches are actually split up into two sub-branches object.  All these
+are objects of type pygit2.Branches with the same methods
+#+BEGIN_SRC python
+local_branches_object = branches_object.local
+remote_branches_object = branches_object.remote
+print(list(local_branches_object))
+print(list(remote_branches_object))
+#+END_SRC
+
+We can get a branch using a branch_name as a key.
+#+BEGIN_SRC python
+a_branch_object = branches_object['master']
+#+END_SRC
+
+And so we find out that it's not so much a list but more like a dictionary.
+But not in an obvious way.  It has an iterator that yields branch names, and it has
+a __getitem__, so we can get a dictionary if we want to look at it in the debugger
+branches_dict = {name: branches_object[name] for name in branches_object}
+
+Anyway, a branch object has a bunch of attributes, properties, and methods.  Namely, it
+has a name which is a refspec string (not the pygit2.Refspec class) and a branch_name
+which is what gets yielded by the iterator and is what we use as keys to get
+the branches.
+#+BEGIN_SRC python
+print('branch.name=' + a_branch_object.name)
+print('branch.branch_name=' + a_branch_object.branch_name)
+#+END_SRC
+
+So this is a way we could push all the branches to origin:
+
+#+BEGIN_SRC python
+origin_object.push(
+    specs=[local_branches_object[branch_name].name for branch_name in local_branches_object],
+    callbacks=easy_creds
+)
+#+END_SRC
+
+Or like this if, for example, we want to ask the user at each branch if the
+want to push it.
+
+#+BEGIN_SRC python
+for branch_name in local_branches_object:
+    print('pushing branch=' + branch_name)
+    branch_object = local_branches_object[branch_name]
+    origin_object.push([branch_object.name], callbacks=easy_creds)
+#+END_SRC
+
+#+RESULTS:
+
+But we can minimize server interactions if we do this:
+
+#+BEGIN_SRC python
+push_specs = []
+for branch_name in local_branches_object:
+    # Ask user if they want to push the branch
+    if True:
+        push_specs.append(local_branches_object[branch_name].name)
+print('pushing {}'.format(push_specs))
+origin_object.push(specs=push_specs, callbacks=easy_creds)
+#+END_SRC
+
+So far we have TODO complete this
